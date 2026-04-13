@@ -1,4 +1,6 @@
+import { ArrowLeft, Check } from "lucide-react";
 import { Link } from "react-router-dom";
+import TrashSection from "../components/TrashSection";
 import { useTheme, type ThemeMode } from "../theme/ThemeProvider";
 
 const OPTIONS: { value: ThemeMode; label: string; hint: string }[] = [
@@ -15,14 +17,15 @@ export default function Settings() {
       <header className="flex items-center gap-3 border-b border-gray-200 px-6 py-4 dark:border-gray-800">
         <Link
           to="/"
-          className="rounded px-2 py-1 text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+          className="flex items-center gap-1 rounded px-2 py-1 text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
         >
-          ← Back
+          <ArrowLeft size={14} />
+          <span>Back</span>
         </Link>
         <h1 className="text-lg font-semibold">Settings</h1>
       </header>
 
-      <div className="mx-auto w-full max-w-2xl px-6 py-8">
+      <div className="mx-auto w-full max-w-2xl space-y-8 px-6 py-8">
         <section>
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
             Appearance
@@ -50,15 +53,15 @@ export default function Settings() {
                     </div>
                   </div>
                   {selected && (
-                    <span className="text-sm text-blue-600 dark:text-blue-400">
-                      ✓
-                    </span>
+                    <Check size={16} className="text-blue-600 dark:text-blue-400" />
                   )}
                 </button>
               );
             })}
           </div>
         </section>
+
+        <TrashSection />
       </div>
     </div>
   );

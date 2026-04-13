@@ -182,6 +182,119 @@ fn migrations() -> Vec<Migration> {
             END;
         "#,
         kind: MigrationKind::Up,
+    },
+    Migration {
+        version: 2,
+        description: "reset_to_backlog_hierarchy",
+        sql: r#"
+            DROP TRIGGER IF EXISTS issues_ai;
+            DROP TRIGGER IF EXISTS issues_ad;
+            DROP TRIGGER IF EXISTS issues_au;
+            DROP TRIGGER IF EXISTS comments_ai;
+            DROP TRIGGER IF EXISTS comments_ad;
+            DROP TRIGGER IF EXISTS comments_au;
+            DROP TABLE IF EXISTS issues_fts;
+            DROP TABLE IF EXISTS comments_fts;
+            DROP TABLE IF EXISTS activity_log;
+            DROP TABLE IF EXISTS attachments;
+            DROP TABLE IF EXISTS comments;
+            DROP TABLE IF EXISTS issue_labels;
+            DROP TABLE IF EXISTS labels;
+            DROP TABLE IF EXISTS issues;
+            DROP TABLE IF EXISTS sprints;
+            DROP TABLE IF EXISTS statuses;
+            DROP TABLE IF EXISTS projects;
+
+            CREATE TABLE projects (
+                id           TEXT PRIMARY KEY,
+                key          TEXT NOT NULL UNIQUE,
+                name         TEXT NOT NULL,
+                description  TEXT NOT NULL DEFAULT '',
+                sort_order   INTEGER NOT NULL DEFAULT 0,
+                created_at   TEXT NOT NULL,
+                updated_at   TEXT NOT NULL,
+                deleted_at   TEXT
+            );
+
+            CREATE TABLE issues (
+                id           TEXT PRIMARY KEY,
+                project_id   TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                type         TEXT NOT NULL CHECK (type IN ('epic','story','task')),
+                parent_id    TEXT REFERENCES issues(id) ON DELETE CASCADE,
+                title        TEXT NOT NULL,
+                description  TEXT NOT NULL DEFAULT '',
+                status       TEXT NOT NULL CHECK (status IN ('todo','in_progress','done')) DEFAULT 'todo',
+                priority     TEXT NOT NULL CHECK (priority IN ('urgent','high','medium','low')) DEFAULT 'medium',
+                sort_order   INTEGER NOT NULL DEFAULT 0,
+                created_at   TEXT NOT NULL,
+                updated_at   TEXT NOT NULL,
+                deleted_at   TEXT
+            );
+            CREATE INDEX idx_issues_project_type ON issues(project_id, type) WHERE deleted_at IS NULL;
+            CREATE INDEX idx_issues_parent ON issues(parent_id) WHERE deleted_at IS NULL;
+            CREATE INDEX idx_issues_status ON issues(status) WHERE deleted_at IS NULL;
+        "#,
+        kind: MigrationKind::Up,
+    },
+    Migration {
+        version: 3,
+        description: "add_project_status",
+        sql: r#"
+            ALTER TABLE projects ADD COLUMN status TEXT NOT NULL DEFAULT 'active';
+        "#,
+        kind: MigrationKind::Up,
+    },
+    Migration {
+        version: 4,
+        description: "add_backlog_status_to_issues",
+        sql: r#"
+            PRAGMA foreign_keys=OFF;
+
+            CREATE TABLE issues_new (
+                id           TEXT PRIMARY KEY,
+                project_id   TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                type         TEXT NOT NULL CHECK (type IN ('epic','story','task')),
+                parent_id    TEXT REFERENCES issues(id) ON DELETE CASCADE,
+                title        TEXT NOT NULL,
+                description  TEXT NOT NULL DEFAULT '',
+                status       TEXT NOT NULL CHECK (status IN ('backlog','todo','in_progress','done')) DEFAULT 'backlog',
+                priority     TEXT NOT NULL CHECK (priority IN ('urgent','high','medium','low')) DEFAULT 'medium',
+                sort_order   INTEGER NOT NULL DEFAULT 0,
+                created_at   TEXT NOT NULL,
+                updated_at   TEXT NOT NULL,
+                deleted_at   TEXT
+            );
+
+            INSERT INTO issues_new (id, project_id, type, parent_id, title, description, status, priority, sort_order, created_at, updated_at, deleted_at)
+            SELECT id, project_id, type, parent_id, title, description, status, priority, sort_order, created_at, updated_at, deleted_at FROM issues;
+
+            DROP TABLE issues;
+            ALTER TABLE issues_new RENAME TO issues;
+
+            CREATE INDEX idx_issues_project_type ON issues(project_id, type) WHERE deleted_at IS NULL;
+            CREATE INDEX idx_issues_parent ON issues(parent_id) WHERE deleted_at IS NULL;
+            CREATE INDEX idx_issues_status ON issues(status) WHERE deleted_at IS NULL;
+
+            PRAGMA foreign_keys=ON;
+        "#,
+        kind: MigrationKind::Up,
+    },
+    Migration {
+        version: 5,
+        description: "add_change_log",
+        sql: r#"
+            CREATE TABLE change_log (
+                id           TEXT PRIMARY KEY,
+                entity_type  TEXT NOT NULL CHECK (entity_type IN ('project','issue')),
+                entity_id    TEXT NOT NULL,
+                action       TEXT NOT NULL CHECK (action IN ('create','update','delete','restore')),
+                changes      TEXT NOT NULL DEFAULT '{}',
+                created_at   TEXT NOT NULL
+            );
+            CREATE INDEX idx_change_log_entity ON change_log(entity_type, entity_id);
+            CREATE INDEX idx_change_log_created ON change_log(created_at);
+        "#,
+        kind: MigrationKind::Up,
     }]
 }
 
@@ -189,6 +302,7 @@ fn migrations() -> Vec<Migration> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_fs::init())
         .plugin(
             tauri_plugin_sql::Builder::default()
                 .add_migrations("sqlite:sprint-board.db", migrations())

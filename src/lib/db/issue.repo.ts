@@ -1,76 +1,83 @@
-import { and, asc, eq, isNull, max, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, isNull, max } from "drizzle-orm";
+import {
+  cleanupRemovedAttachments,
+  deleteAttachmentByUrl,
+  extractAttachmentUrls,
+} from "../attachments";
+import * as audit from "./audit.repo";
 import { newId, nowIso, orm } from "./connection";
-import { comments, issue_labels, issues, projects } from "./schema";
-import type { Comment, Issue, IssueType, Priority } from "./types";
+import { change_log, issues } from "./schema";
+import type { Issue, IssueStatus, IssueType, Priority } from "./types";
 
 export type CreateIssueInput = {
   project_id: string;
   type: IssueType;
-  summary: string;
+  parent_id: string | null;
+  title: string;
   description?: string;
-  status_id: string;
+  status?: IssueStatus;
   priority?: Priority;
-  parent_id?: string | null;
-  sprint_id?: string | null;
-  assignee?: string | null;
-  reporter?: string | null;
-  story_points?: number | null;
-  due_date?: string | null;
 };
 
 export async function createIssue(input: CreateIssueInput): Promise<Issue> {
-  const id = newId();
+  validateHierarchy(input.type, input.parent_id);
+
   const now = nowIso();
-
-  // 프로젝트 카운터 증가 + 키 조회를 단일 문장으로 원자적 처리 (UPDATE ... RETURNING).
-  const bumped = await orm
-    .update(projects)
-    .set({
-      issue_counter: sql`${projects.issue_counter} + 1`,
-      updated_at: now,
-    })
-    .where(eq(projects.id, input.project_id))
-    .returning({
-      counter: projects.issue_counter,
-      project_key: projects.key,
-    });
-
-  if (bumped.length === 0) {
-    throw new Error(`Project not found: ${input.project_id}`);
-  }
-  const { counter, project_key } = bumped[0];
-  const issueKey = `${project_key}-${counter}`;
-
-  // 같은 상태 컬럼 내 최상단 뒤에 배치
+  const status: IssueStatus = input.status ?? "backlog";
   const [{ maxOrder }] = await orm
     .select({ maxOrder: max(issues.sort_order) })
     .from(issues)
-    .where(and(eq(issues.status_id, input.status_id), isNull(issues.deleted_at)));
+    .where(
+      and(
+        eq(issues.project_id, input.project_id),
+        eq(issues.type, input.type),
+        eq(issues.status, status),
+        isNull(issues.deleted_at),
+      ),
+    );
 
-  await orm.insert(issues).values({
-    id,
+  const row: Issue = {
+    id: newId(),
     project_id: input.project_id,
-    key: issueKey,
     type: input.type,
-    summary: input.summary,
+    parent_id: input.parent_id,
+    title: input.title.trim(),
     description: input.description ?? "",
-    status_id: input.status_id,
+    status,
     priority: input.priority ?? "medium",
-    parent_id: input.parent_id ?? null,
-    sprint_id: input.sprint_id ?? null,
-    assignee: input.assignee ?? null,
-    reporter: input.reporter ?? null,
-    story_points: input.story_points ?? null,
-    sort_order: (maxOrder ?? -1) + 1,
-    due_date: input.due_date ?? null,
+    sort_order: ((maxOrder as number | null) ?? -1) + 1,
     created_at: now,
     updated_at: now,
+    deleted_at: null,
+  };
+  await orm.insert(issues).values(row);
+  await audit.log({
+    entity_type: "issue",
+    entity_id: row.id,
+    action: "create",
+    changes: {
+      snapshot: {
+        type: row.type,
+        title: row.title,
+        status: row.status,
+        priority: row.priority,
+        parent_id: row.parent_id,
+      },
+    },
   });
-
-  return (await getIssueById(id))!;
+  return row;
 }
 
-export async function getIssueById(id: string): Promise<Issue | null> {
+function validateHierarchy(type: IssueType, parentId: string | null) {
+  if (type === "epic" && parentId !== null) {
+    throw new Error("Epic은 부모를 가질 수 없습니다");
+  }
+  if ((type === "story" || type === "task") && !parentId) {
+    throw new Error(`${type}는 부모가 필요합니다`);
+  }
+}
+
+export async function getIssue(id: string): Promise<Issue | null> {
   const rows = await orm
     .select()
     .from(issues)
@@ -79,150 +86,245 @@ export async function getIssueById(id: string): Promise<Issue | null> {
   return (rows[0] as Issue | undefined) ?? null;
 }
 
-export async function getIssueByKey(key: string): Promise<Issue | null> {
-  const rows = await orm
-    .select()
-    .from(issues)
-    .where(and(eq(issues.key, key), isNull(issues.deleted_at)))
-    .limit(1);
-  return (rows[0] as Issue | undefined) ?? null;
-}
-
-export async function listIssuesInSprint(sprintId: string): Promise<Issue[]> {
-  const rows = await orm
-    .select()
-    .from(issues)
-    .where(and(eq(issues.sprint_id, sprintId), isNull(issues.deleted_at)))
-    .orderBy(asc(issues.sort_order));
-  return rows as Issue[];
-}
-
-export async function listBacklog(projectId: string): Promise<Issue[]> {
+export async function listEpics(projectId: string): Promise<Issue[]> {
   const rows = await orm
     .select()
     .from(issues)
     .where(
       and(
         eq(issues.project_id, projectId),
-        isNull(issues.sprint_id),
+        eq(issues.type, "epic"),
         isNull(issues.deleted_at),
       ),
     )
-    .orderBy(asc(issues.sort_order));
+    .orderBy(asc(issues.sort_order), asc(issues.created_at));
   return rows as Issue[];
 }
 
-export async function listSubIssues(parentId: string): Promise<Issue[]> {
+export async function listChildren(parentId: string): Promise<Issue[]> {
   const rows = await orm
     .select()
     .from(issues)
     .where(and(eq(issues.parent_id, parentId), isNull(issues.deleted_at)))
-    .orderBy(asc(issues.sort_order));
+    .orderBy(asc(issues.status), asc(issues.sort_order));
+  return rows as Issue[];
+}
+
+export async function listDeletedIssues(): Promise<Issue[]> {
+  const rows = await orm
+    .select()
+    .from(issues)
+    .where(isNotNull(issues.deleted_at))
+    .orderBy(desc(issues.deleted_at));
   return rows as Issue[];
 }
 
 export type IssuePatch = Partial<
-  Pick<
-    Issue,
-    | "summary"
-    | "description"
-    | "status_id"
-    | "priority"
-    | "parent_id"
-    | "sprint_id"
-    | "assignee"
-    | "reporter"
-    | "story_points"
-    | "sort_order"
-    | "due_date"
-    | "type"
-  >
+  Pick<Issue, "title" | "description" | "status" | "priority" | "sort_order">
 >;
 
 export async function updateIssue(id: string, patch: IssuePatch): Promise<void> {
-  await orm
-    .update(issues)
-    .set({ ...patch, updated_at: nowIso() })
-    .where(eq(issues.id, id));
+  const rows = await orm
+    .select()
+    .from(issues)
+    .where(eq(issues.id, id))
+    .limit(1);
+  const before = rows[0] as Issue | undefined;
+  if (!before) return;
+
+  const update: Record<string, unknown> = { updated_at: nowIso() };
+  const applied: Record<string, unknown> = {};
+  if (patch.title !== undefined) {
+    update.title = patch.title;
+    applied.title = patch.title;
+  }
+  if (patch.description !== undefined) {
+    update.description = patch.description;
+    applied.description = patch.description;
+    await cleanupRemovedAttachments(
+      before.description ?? "",
+      patch.description,
+    );
+  }
+  if (patch.status !== undefined) {
+    update.status = patch.status;
+    applied.status = patch.status;
+  }
+  if (patch.priority !== undefined) {
+    update.priority = patch.priority;
+    applied.priority = patch.priority;
+  }
+  if (patch.sort_order !== undefined) {
+    update.sort_order = patch.sort_order;
+    applied.sort_order = patch.sort_order;
+  }
+  await orm.update(issues).set(update).where(eq(issues.id, id));
+
+  const changes = audit.diff(
+    before as unknown as Record<string, unknown>,
+    applied,
+  );
+  // Skip noise-only changes (sort_order-only) from audit feed.
+  const nonNoise = Object.keys(changes).filter((k) => k !== "sort_order");
+  if (nonNoise.length > 0) {
+    await audit.log({
+      entity_type: "issue",
+      entity_id: id,
+      action: "update",
+      changes,
+    });
+  }
 }
 
 export async function moveIssue(
   id: string,
-  statusId: string,
+  status: IssueStatus,
   sortOrder: number,
+): Promise<void> {
+  const rows = await orm
+    .select()
+    .from(issues)
+    .where(eq(issues.id, id))
+    .limit(1);
+  const before = rows[0] as Issue | undefined;
+  await orm
+    .update(issues)
+    .set({ status, sort_order: sortOrder, updated_at: nowIso() })
+    .where(eq(issues.id, id));
+  if (before && before.status !== status) {
+    await audit.log({
+      entity_type: "issue",
+      entity_id: id,
+      action: "update",
+      changes: { status: [before.status, status] },
+    });
+  }
+}
+
+export async function deleteIssue(id: string): Promise<void> {
+  const now = nowIso();
+  await cascadeSoftDelete(id, now);
+}
+
+async function cascadeSoftDelete(id: string, now: string): Promise<void> {
+  const children = await orm
+    .select({ id: issues.id })
+    .from(issues)
+    .where(and(eq(issues.parent_id, id), isNull(issues.deleted_at)));
+  for (const c of children) await cascadeSoftDelete(c.id as string, now);
+  await orm
+    .update(issues)
+    .set({ deleted_at: now, updated_at: now })
+    .where(eq(issues.id, id));
+  await audit.log({
+    entity_type: "issue",
+    entity_id: id,
+    action: "delete",
+  });
+}
+
+export async function restoreIssue(id: string): Promise<void> {
+  const rows = await orm
+    .select()
+    .from(issues)
+    .where(eq(issues.id, id))
+    .limit(1);
+  const before = rows[0] as Issue | undefined;
+  if (!before) return;
+
+  const now = nowIso();
+  if (before.deleted_at) {
+    await cascadeRestore(id, before.deleted_at, now);
+  } else {
+    await orm
+      .update(issues)
+      .set({ deleted_at: null, updated_at: now })
+      .where(eq(issues.id, id));
+  }
+  await audit.log({
+    entity_type: "issue",
+    entity_id: id,
+    action: "restore",
+  });
+}
+
+// Only restore descendants whose deleted_at matches the parent's — otherwise
+// a previously-deleted child would be resurrected unexpectedly.
+async function cascadeRestore(
+  id: string,
+  deletedAt: string,
+  now: string,
 ): Promise<void> {
   await orm
     .update(issues)
-    .set({ status_id: statusId, sort_order: sortOrder, updated_at: nowIso() })
+    .set({ deleted_at: null, updated_at: now })
     .where(eq(issues.id, id));
+  const children = await orm
+    .select({ id: issues.id })
+    .from(issues)
+    .where(and(eq(issues.parent_id, id), eq(issues.deleted_at, deletedAt)));
+  for (const c of children) await cascadeRestore(c.id as string, deletedAt, now);
 }
 
-export async function softDeleteIssue(id: string): Promise<void> {
-  const now = nowIso();
-  await orm
-    .update(issues)
-    .set({ deleted_at: now, updated_at: now })
+// Permanent delete. FK `ON DELETE CASCADE` on issues.parent_id removes all
+// descendant issue rows for us; we strip matching change_log entries first,
+// and also delete any attachment files referenced in their descriptions.
+export async function purgeIssue(id: string): Promise<void> {
+  const descendantIds = await collectDescendantIds(id);
+  const allIds = [id, ...descendantIds];
+
+  // Collect attachment URLs from every affected issue description.
+  const rows = await orm
+    .select({ id: issues.id, description: issues.description })
+    .from(issues)
     .where(eq(issues.id, id));
+  const descendantRows =
+    descendantIds.length > 0
+      ? await Promise.all(
+          descendantIds.map((did) =>
+            orm
+              .select({ id: issues.id, description: issues.description })
+              .from(issues)
+              .where(eq(issues.id, did))
+              .limit(1)
+              .then((r) => r[0]),
+          ),
+        )
+      : [];
+  const allRows = [...rows, ...descendantRows].filter(Boolean) as {
+    id: string;
+    description: string;
+  }[];
+
+  const urls = new Set<string>();
+  for (const r of allRows) {
+    for (const u of extractAttachmentUrls(r.description ?? "")) urls.add(u);
+  }
+  for (const u of urls) await deleteAttachmentByUrl(u);
+
+  for (const did of allIds) {
+    await orm
+      .delete(change_log)
+      .where(
+        and(
+          eq(change_log.entity_type, "issue"),
+          eq(change_log.entity_id, did),
+        ),
+      );
+  }
+  await orm.delete(issues).where(eq(issues.id, id));
 }
 
-// ---------- labels attach ----------
-
-export async function attachLabel(issueId: string, labelId: string): Promise<void> {
-  await orm
-    .insert(issue_labels)
-    .values({ issue_id: issueId, label_id: labelId })
-    .onConflictDoNothing();
-}
-
-export async function detachLabel(issueId: string, labelId: string): Promise<void> {
-  await orm
-    .delete(issue_labels)
-    .where(
-      and(
-        eq(issue_labels.issue_id, issueId),
-        eq(issue_labels.label_id, labelId),
-      ),
-    );
-}
-
-// ---------- comments ----------
-
-export async function addComment(
-  issueId: string,
-  body: string,
-  author: string | null = null,
-): Promise<Comment> {
-  const id = newId();
-  const now = nowIso();
-  await orm.insert(comments).values({
-    id,
-    issue_id: issueId,
-    author,
-    body,
-    created_at: now,
-    updated_at: now,
-  });
-  const rows = await orm
-    .select()
-    .from(comments)
-    .where(eq(comments.id, id))
-    .limit(1);
-  return rows[0] as Comment;
-}
-
-export async function listComments(issueId: string): Promise<Comment[]> {
-  const rows = await orm
-    .select()
-    .from(comments)
-    .where(and(eq(comments.issue_id, issueId), isNull(comments.deleted_at)))
-    .orderBy(asc(comments.created_at));
-  return rows as Comment[];
-}
-
-export async function softDeleteComment(id: string): Promise<void> {
-  const now = nowIso();
-  await orm
-    .update(comments)
-    .set({ deleted_at: now, updated_at: now })
-    .where(eq(comments.id, id));
+async function collectDescendantIds(parentId: string): Promise<string[]> {
+  const children = await orm
+    .select({ id: issues.id })
+    .from(issues)
+    .where(eq(issues.parent_id, parentId));
+  const ids: string[] = [];
+  for (const c of children) {
+    const cid = c.id as string;
+    ids.push(cid);
+    ids.push(...(await collectDescendantIds(cid)));
+  }
+  return ids;
 }

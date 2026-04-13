@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -13,4 +14,59 @@ body {
   font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+@keyframes sb-fade-in {
+  from { opacity: 0; transform: translateY(-2px); }
+  to { opacity: 1; }
+}
+@keyframes sb-slide-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; }
+}
+@keyframes sb-pop-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; }
+}
+
+.sb-fade-in { animation: sb-fade-in 0.18s ease-out; }
+.sb-slide-in { animation: sb-slide-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.sb-pop-in { animation: sb-pop-in 0.18s ease-out; }
+
+/* Final state must NOT retain a transform — otherwise it creates a CSS
+   containing block, which breaks position:fixed inside (DragOverlay). */
+@keyframes sb-page-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; }
+}
+.sb-page-in { animation: sb-page-in 0.24s cubic-bezier(0.2, 0.8, 0.2, 1); }
+
+/* Smooth default for all interactive chrome */
+button,
+a,
+input,
+select,
+textarea,
+[role="button"] {
+  transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Panels / cards */
+aside,
+.sb-card,
+.sb-panel {
+  transition: width 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    background-color 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+/* Chevron rotation */
+.sb-chevron {
+  transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.sb-chevron.sb-chevron-open {
+  transform: rotate(90deg);
 }
