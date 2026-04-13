@@ -1,39 +1,40 @@
 import { useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import Sidebar from "../components/Sidebar";
 
-function Home() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+type Selection =
+  | { kind: "backlog"; projectId: string }
+  | { kind: "sprint"; projectId: string; sprintId: string }
+  | null;
 
-  async function greet() {
-    setGreetMsg(await invoke("greet", { name }));
-  }
+export default function Home() {
+  const [selection, setSelection] = useState<Selection>(null);
 
   return (
-    <section className="flex flex-col items-center gap-4">
-      <h1 className="text-3xl font-bold">Home</h1>
-      <form
-        className="flex gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          className="rounded border border-gray-300 px-3 py-2"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button
-          type="submit"
-          className="rounded bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700"
-        >
-          Greet
-        </button>
-      </form>
-      {greetMsg && <p className="text-lg">{greetMsg}</p>}
-    </section>
+    <div className="flex h-screen w-screen overflow-hidden bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100">
+      <Sidebar selection={selection} onSelect={setSelection} />
+      <main className="flex-1 overflow-auto">
+        <RightPanel selection={selection} />
+      </main>
+    </div>
   );
 }
 
-export default Home;
+function RightPanel({ selection }: { selection: Selection }) {
+  if (!selection) {
+    return (
+      <div className="flex h-full items-center justify-center text-gray-400 dark:text-gray-500">
+        <p className="text-sm">Select a project to get started.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full items-center justify-center text-gray-400 dark:text-gray-500">
+      <p className="text-sm">
+        {selection.kind === "backlog"
+          ? "Backlog view — coming soon"
+          : "Sprint board — coming soon"}
+      </p>
+    </div>
+  );
+}
