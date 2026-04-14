@@ -44,7 +44,7 @@
       "active": true,
       "dialog": false,
       "endpoints": [
-        "https://github.com/sqlimitless/SprintBoard.git/releases/latest/download/latest.json"
+        "https://github.com/sqlimitless/SprintBoard/releases/latest/download/latest.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDIxODJDN0U2MEUyRjNDMwpSV1REOCtKZ2Zpd1lBaDdWbVRBMXU0bWRwSVlTaEdsZ2xkZCtHNFdCVGIyenJiUkQyRnVOb3FkQQo="
     }
