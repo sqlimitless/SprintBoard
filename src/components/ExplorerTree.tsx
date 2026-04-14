@@ -244,22 +244,13 @@ export default function ExplorerTree() {
           <FolderOpen size={14} />
           <span>Explorer</span>
         </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => navigate("/p?new=1")}
-            title="새 프로젝트"
-            className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100"
-          >
-            <Plus size={14} />
-          </button>
-          <Link
-            to="/settings"
-            title="Settings"
-            className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100"
-          >
-            <SettingsIcon size={14} />
-          </Link>
-        </div>
+        <button
+          onClick={() => navigate("/p?new=1")}
+          title="새 프로젝트"
+          className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100"
+        >
+          <Plus size={14} />
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto py-1 text-sm">
@@ -381,6 +372,17 @@ export default function ExplorerTree() {
             </div>
           );
         })}
+      </div>
+
+      <div className="border-t border-gray-200 px-3 py-2 dark:border-gray-800">
+        <Link
+          to="/settings"
+          title="Settings"
+          className="flex items-center gap-2 rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100"
+        >
+          <SettingsIcon size={14} />
+          <span>Settings</span>
+        </Link>
       </div>
     </div>
   );
