@@ -25,3 +25,7 @@ dist-ssr
 
 # AI assistant local files
 .claude/
+
+# Tauri updater signing keys (NEVER commit)
+*.key
+*.key.pub

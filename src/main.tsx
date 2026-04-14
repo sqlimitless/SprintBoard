@@ -2,12 +2,12 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { HashRouter } from "react-router-dom";
 import App from "./App";
+import UpdateBanner from "./components/UpdateBanner";
 import { runAttachmentSweep } from "./lib/db/attachments.sweep";
+import { checkForUpdate } from "./lib/updater";
 import { ThemeProvider } from "./theme/ThemeProvider";
 import "./App.css";
 
-// Best-effort: clean orphaned image files a few seconds after boot so aborted
-// creates (image pasted but form never saved) don't accumulate on disk.
 setTimeout(() => {
   runAttachmentSweep()
     .then((n) => {
@@ -16,12 +16,17 @@ setTimeout(() => {
     .catch((err) => console.warn("[attachments] sweep failed:", err));
 }, 3000);
 
+setTimeout(() => {
+  checkForUpdate();
+}, 5000);
+
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <ThemeProvider>
       <HashRouter>
         <App />
       </HashRouter>
+      <UpdateBanner />
     </ThemeProvider>
   </React.StrictMode>,
 );

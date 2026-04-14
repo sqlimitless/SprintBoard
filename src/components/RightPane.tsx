@@ -128,35 +128,33 @@ export default function RightPane() {
   }
 
   const asideWidth = !detailOpen ? "2rem" : "24rem";
+  const asideLeft = detailMax ? "0px" : `calc(100% - ${asideWidth})`;
+  const asideTransition = detailMax
+    ? "left 360ms cubic-bezier(0.4, 0.0, 0.2, 1)"
+    : detailOpen
+      ? "left 420ms cubic-bezier(0.34, 1.56, 0.64, 1)"
+      : "left 320ms cubic-bezier(0.4, 0.0, 0.2, 1)";
 
   return (
     <div className="relative flex min-w-0 flex-1">
       <div
         key={loc.key}
+        style={detailId ? { paddingRight: asideWidth, transition: "padding-right 360ms cubic-bezier(0.4, 0.0, 0.2, 1)" } : undefined}
         className="sb-page-in flex min-w-0 flex-1 flex-col"
       >
         {boardNode}
       </div>
       {detailId && (
         <aside
-          style={
-            detailMax
-              ? {
-                  transition:
-                    "opacity 240ms ease-out, transform 320ms cubic-bezier(0.4,0,0.2,1)",
-                }
-              : {
-                  width: asideWidth,
-                  transition: detailOpen
-                    ? "width 420ms cubic-bezier(0.34, 1.56, 0.64, 1)"
-                    : "width 320ms cubic-bezier(0.4, 0.0, 0.2, 1)",
-                }
-          }
+          style={{
+            left: asideLeft,
+            right: 0,
+            top: 0,
+            bottom: 0,
+            transition: asideTransition,
+          }}
           className={
-            "flex flex-col overflow-hidden border-l border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950 " +
-            (detailMax
-              ? "absolute inset-0 z-10"
-              : "relative shrink-0")
+            "absolute z-10 flex flex-col overflow-hidden border-l border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950"
           }
         >
           <div

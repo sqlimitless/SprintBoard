@@ -1,5 +1,6 @@
 import { ArrowLeft, Check } from "lucide-react";
 import { Link } from "react-router-dom";
+import AboutSection from "../components/AboutSection";
 import TrashSection from "../components/TrashSection";
 import { useTheme, type ThemeMode } from "../theme/ThemeProvider";
 
@@ -60,6 +61,8 @@ export default function Settings() {
             })}
           </div>
         </section>
+
+        <AboutSection />
 
         <TrashSection />
       </div>

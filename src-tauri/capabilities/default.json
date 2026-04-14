@@ -24,6 +24,8 @@
     "fs:allow-read-file",
     "fs:allow-remove",
     "fs:allow-exists",
-    "fs:allow-read-dir"
+    "fs:allow-read-dir",
+    "updater:default",
+    "process:default"
   ]
 }
