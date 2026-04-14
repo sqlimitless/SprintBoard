@@ -81,7 +81,7 @@ export default function RightPane() {
           project={project}
           onSaved={(p) => {
             setProject(p);
-            navigate(`/p/${p.id}`);
+            navigate(`/backlog/p/${p.id}`);
           }}
         />
       </div>
@@ -99,7 +99,7 @@ export default function RightPane() {
         level="task"
         onSelect={(id) =>
           navigate(
-            `/p/${params.projectId}/e/${params.epicId}/s/${params.storyId}?task=${id}`,
+            `/backlog/p/${params.projectId}/e/${params.epicId}/s/${params.storyId}?task=${id}`,
           )
         }
         selectedId={taskId ?? undefined}
@@ -112,7 +112,7 @@ export default function RightPane() {
         key={`e:${params.epicId}`}
         parentId={params.epicId}
         level="story"
-        onSelect={(id) => navigate(`/p/${params.projectId}/e/${params.epicId}/s/${id}`)}
+        onSelect={(id) => navigate(`/backlog/p/${params.projectId}/e/${params.epicId}/s/${id}`)}
       />
     );
     detailId = params.epicId;
@@ -218,7 +218,7 @@ function ProjectOverview({ project }: { project: Project | null }) {
     try {
       await projectRepo.deleteProject(project.id);
       window.dispatchEvent(new CustomEvent("projects:changed"));
-      navigate("/p");
+      navigate("/backlog/p");
     } catch (err) {
       console.error(err);
       alert(`삭제 실패\n${err instanceof Error ? err.message : String(err)}`);
@@ -234,7 +234,7 @@ function ProjectOverview({ project }: { project: Project | null }) {
         </div>
         <div className="flex items-center gap-1">
           <button
-            onClick={() => navigate(`/p/${project.id}?edit=1`)}
+            onClick={() => navigate(`/backlog/p/${project.id}?edit=1`)}
             className="flex items-center gap-1 rounded border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
           >
             <Pencil size={14} /> 편집

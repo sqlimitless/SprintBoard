@@ -1,13 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import * as issueRepo from "../lib/db/issue.repo";
+import * as sprintRepo from "../lib/db/sprint.repo";
 import {
   PRIORITIES,
   STATUS_LABELS,
   STATUS_ORDER,
+  SPRINT_STATE_LABELS,
   type Issue,
   type IssueStatus,
   type Priority,
+  type Sprint,
 } from "../lib/db/types";
+import { dispatchSprintsChanged } from "../lib/sprint/SprintContext";
 import ChildIssueSection from "./ChildIssueSection";
 import { IssueTypeIcon } from "./issueMeta";
 import MetaMenu from "./MetaMenu";
@@ -18,16 +22,23 @@ export default function IssueDetailPanel({ issueId }: { issueId: string }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [dirty, setDirty] = useState(false);
+  const [sprints, setSprints] = useState<Sprint[]>([]);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    issueRepo.getIssue(issueId).then((i) => {
+    issueRepo.getIssue(issueId).then(async (i) => {
       if (cancelled) return;
       setIssue(i);
       setTitle(i?.title ?? "");
       setDescription(i?.description ?? "");
       setDirty(false);
+      if (i && i.type === "story") {
+        const list = await sprintRepo.listByProject(i.project_id);
+        if (!cancelled) setSprints(list);
+      } else if (!cancelled) {
+        setSprints([]);
+      }
     });
     return () => {
       cancelled = true;
@@ -58,6 +69,21 @@ export default function IssueDetailPanel({ issueId }: { issueId: string }) {
     if (!issue) return;
     await issueRepo.updateIssue(issue.id, { priority });
     setIssue({ ...issue, priority });
+    window.dispatchEvent(new CustomEvent("issues:changed"));
+  }
+
+  async function updateDates(patch: { start_date?: string | null; due_date?: string | null }) {
+    if (!issue) return;
+    await issueRepo.updateIssue(issue.id, patch);
+    setIssue({ ...issue, ...patch });
+    window.dispatchEvent(new CustomEvent("issues:changed"));
+  }
+
+  async function updateSprint(sprintId: string | null) {
+    if (!issue) return;
+    await issueRepo.assignSprint(issue.id, sprintId);
+    setIssue({ ...issue, sprint_id: sprintId });
+    dispatchSprintsChanged();
     window.dispatchEvent(new CustomEvent("issues:changed"));
   }
 
@@ -134,6 +160,46 @@ export default function IssueDetailPanel({ issueId }: { issueId: string }) {
           </select>
         </label>
       </div>
+
+      {(issue.type === "story" || issue.type === "task") && (
+        <div className="grid grid-cols-2 gap-3 border-b border-gray-200 px-4 py-3 text-xs dark:border-gray-800">
+          <label className="flex flex-col gap-1">
+            <span className="text-gray-500">시작일</span>
+            <input
+              type="date"
+              value={issue.start_date?.slice(0, 10) ?? ""}
+              onChange={(e) => updateDates({ start_date: e.target.value || null })}
+              className="rounded border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-900"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-gray-500">종료일</span>
+            <input
+              type="date"
+              value={issue.due_date?.slice(0, 10) ?? ""}
+              onChange={(e) => updateDates({ due_date: e.target.value || null })}
+              className="rounded border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-900"
+            />
+          </label>
+          {issue.type === "story" && (
+            <label className="col-span-2 flex flex-col gap-1">
+              <span className="text-gray-500">스프린트</span>
+              <select
+                value={issue.sprint_id ?? ""}
+                onChange={(e) => updateSprint(e.target.value || null)}
+                className="rounded border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-900"
+              >
+                <option value="">(백로그)</option>
+                {sprints.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    [{SPRINT_STATE_LABELS[s.state]}] {s.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
+      )}
 
       <div className="flex-1 p-4">
         <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">

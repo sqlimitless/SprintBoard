@@ -6,6 +6,7 @@ import type {
   IssueType,
   Priority,
   ProjectStatus,
+  SprintState,
 } from "./types";
 
 export const change_log = sqliteTable(
@@ -35,6 +36,29 @@ export const projects = sqliteTable("projects", {
   deleted_at: text("deleted_at"),
 });
 
+export const sprints = sqliteTable(
+  "sprints",
+  {
+    id: text("id").primaryKey(),
+    project_id: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    goal: text("goal").notNull().default(""),
+    state: text("state").notNull().$type<SprintState>().default("future"),
+    start_date: text("start_date"),
+    end_date: text("end_date"),
+    sort_order: integer("sort_order").notNull().default(0),
+    created_at: text("created_at").notNull(),
+    updated_at: text("updated_at").notNull(),
+    closed_at: text("closed_at"),
+    deleted_at: text("deleted_at"),
+  },
+  (t) => ({
+    byProjectState: index("idx_sprints_project_state").on(t.project_id, t.state),
+  }),
+);
+
 export const issues = sqliteTable(
   "issues",
   {
@@ -49,6 +73,9 @@ export const issues = sqliteTable(
     status: text("status").notNull().$type<IssueStatus>().default("backlog"),
     priority: text("priority").notNull().$type<Priority>().default("medium"),
     sort_order: integer("sort_order").notNull().default(0),
+    sprint_id: text("sprint_id"),
+    start_date: text("start_date"),
+    due_date: text("due_date"),
     created_at: text("created_at").notNull(),
     updated_at: text("updated_at").notNull(),
     deleted_at: text("deleted_at"),
@@ -57,5 +84,6 @@ export const issues = sqliteTable(
     byProjectType: index("idx_issues_project_type").on(t.project_id, t.type),
     byParent: index("idx_issues_parent").on(t.parent_id),
     byStatus: index("idx_issues_status").on(t.status),
+    bySprint: index("idx_issues_sprint").on(t.sprint_id),
   }),
 );

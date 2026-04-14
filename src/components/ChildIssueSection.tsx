@@ -90,7 +90,7 @@ export default function ChildIssueSection({
 
   function open(id: string) {
     if (onOpenChild) onOpenChild(id);
-    else if (childType === "epic") navigate(`/p/${projectId}/e/${id}`);
+    else if (childType === "epic") navigate(`/backlog/p/${projectId}/e/${id}`);
   }
 
   const label = LABEL_BY_TYPE[childType];

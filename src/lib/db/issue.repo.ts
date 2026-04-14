@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNotNull, isNull, max } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, max } from "drizzle-orm";
 import {
   cleanupRemovedAttachments,
   deleteAttachmentByUrl,
@@ -46,6 +46,9 @@ export async function createIssue(input: CreateIssueInput): Promise<Issue> {
     status,
     priority: input.priority ?? "medium",
     sort_order: ((maxOrder as number | null) ?? -1) + 1,
+    sprint_id: null,
+    start_date: null,
+    due_date: null,
     created_at: now,
     updated_at: now,
     deleted_at: null,
@@ -120,7 +123,17 @@ export async function listDeletedIssues(): Promise<Issue[]> {
 }
 
 export type IssuePatch = Partial<
-  Pick<Issue, "title" | "description" | "status" | "priority" | "sort_order">
+  Pick<
+    Issue,
+    | "title"
+    | "description"
+    | "status"
+    | "priority"
+    | "sort_order"
+    | "start_date"
+    | "due_date"
+    | "sprint_id"
+  >
 >;
 
 export async function updateIssue(id: string, patch: IssuePatch): Promise<void> {
@@ -157,6 +170,18 @@ export async function updateIssue(id: string, patch: IssuePatch): Promise<void> 
   if (patch.sort_order !== undefined) {
     update.sort_order = patch.sort_order;
     applied.sort_order = patch.sort_order;
+  }
+  if (patch.start_date !== undefined) {
+    update.start_date = patch.start_date;
+    applied.start_date = patch.start_date;
+  }
+  if (patch.due_date !== undefined) {
+    update.due_date = patch.due_date;
+    applied.due_date = patch.due_date;
+  }
+  if (patch.sprint_id !== undefined) {
+    update.sprint_id = patch.sprint_id;
+    applied.sprint_id = patch.sprint_id;
   }
   await orm.update(issues).set(update).where(eq(issues.id, id));
 
@@ -313,6 +338,85 @@ export async function purgeIssue(id: string): Promise<void> {
       );
   }
   await orm.delete(issues).where(eq(issues.id, id));
+}
+
+// Stories directly attached to the sprint, plus all their (live) task children.
+export async function listBySprint(sprintId: string): Promise<{
+  stories: Issue[];
+  tasks: Issue[];
+}> {
+  const stories = (await orm
+    .select()
+    .from(issues)
+    .where(
+      and(
+        eq(issues.sprint_id, sprintId),
+        eq(issues.type, "story"),
+        isNull(issues.deleted_at),
+      ),
+    )
+    .orderBy(asc(issues.sort_order), asc(issues.created_at))) as Issue[];
+
+  if (stories.length === 0) return { stories: [], tasks: [] };
+
+  const storyIds = stories.map((s) => s.id);
+  const tasks = (await orm
+    .select()
+    .from(issues)
+    .where(
+      and(
+        inArray(issues.parent_id, storyIds),
+        eq(issues.type, "task"),
+        isNull(issues.deleted_at),
+      ),
+    )
+    .orderBy(asc(issues.status), asc(issues.sort_order))) as Issue[];
+
+  return { stories, tasks };
+}
+
+// All live stories in a project, regardless of sprint assignment. Used by
+// the backlog planning view to arrange stories across sprints + backlog.
+export async function listStoriesByProject(projectId: string): Promise<Issue[]> {
+  const rows = await orm
+    .select()
+    .from(issues)
+    .where(
+      and(
+        eq(issues.project_id, projectId),
+        eq(issues.type, "story"),
+        isNull(issues.deleted_at),
+      ),
+    )
+    .orderBy(asc(issues.sort_order), asc(issues.created_at));
+  return rows as Issue[];
+}
+
+// Stories for an epic that are not assigned to any sprint.
+export async function listUnassignedStories(epicId: string): Promise<Issue[]> {
+  const rows = await orm
+    .select()
+    .from(issues)
+    .where(
+      and(
+        eq(issues.parent_id, epicId),
+        eq(issues.type, "story"),
+        isNull(issues.sprint_id),
+        isNull(issues.deleted_at),
+      ),
+    )
+    .orderBy(asc(issues.sort_order));
+  return rows as Issue[];
+}
+
+export async function assignSprint(
+  storyId: string,
+  sprintId: string | null,
+): Promise<void> {
+  await orm
+    .update(issues)
+    .set({ sprint_id: sprintId, updated_at: nowIso() })
+    .where(eq(issues.id, storyId));
 }
 
 async function collectDescendantIds(parentId: string): Promise<string[]> {

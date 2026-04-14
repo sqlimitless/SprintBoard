@@ -49,7 +49,7 @@ export default function AboutSection() {
           <div className="border-t border-gray-200 px-4 py-2 text-xs dark:border-gray-800">
             {result.kind === "available" && (
               <span className="text-blue-600 dark:text-blue-400">
-                새 버전 {result.version} 사용 가능 — 우하단 배너에서 설치하세요.
+                새 버전 {result.version} 사용 가능
               </span>
             )}
             {result.kind === "up-to-date" && (

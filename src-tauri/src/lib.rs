@@ -295,6 +295,34 @@ fn migrations() -> Vec<Migration> {
             CREATE INDEX idx_change_log_created ON change_log(created_at);
         "#,
         kind: MigrationKind::Up,
+    },
+    Migration {
+        version: 6,
+        description: "add_sprints_and_issue_dates",
+        sql: r#"
+            CREATE TABLE sprints (
+                id           TEXT PRIMARY KEY,
+                project_id   TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                name         TEXT NOT NULL,
+                goal         TEXT NOT NULL DEFAULT '',
+                state        TEXT NOT NULL CHECK (state IN ('future','active','closed')) DEFAULT 'future',
+                start_date   TEXT,
+                end_date     TEXT,
+                sort_order   INTEGER NOT NULL DEFAULT 0,
+                created_at   TEXT NOT NULL,
+                updated_at   TEXT NOT NULL,
+                closed_at    TEXT,
+                deleted_at   TEXT
+            );
+            CREATE INDEX idx_sprints_project_state ON sprints(project_id, state) WHERE deleted_at IS NULL;
+            CREATE UNIQUE INDEX idx_sprints_one_active ON sprints(project_id) WHERE state = 'active' AND deleted_at IS NULL;
+
+            ALTER TABLE issues ADD COLUMN sprint_id TEXT;
+            ALTER TABLE issues ADD COLUMN start_date TEXT;
+            ALTER TABLE issues ADD COLUMN due_date TEXT;
+            CREATE INDEX idx_issues_sprint ON issues(sprint_id) WHERE deleted_at IS NULL;
+        "#,
+        kind: MigrationKind::Up,
     }]
 }
 

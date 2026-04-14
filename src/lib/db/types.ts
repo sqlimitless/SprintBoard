@@ -71,7 +71,39 @@ export type Issue = {
   status: IssueStatus;
   priority: Priority;
   sort_order: number;
+  sprint_id: string | null;
+  start_date: string | null;
+  due_date: string | null;
   created_at: string;
   updated_at: string;
+  deleted_at: string | null;
+};
+
+export type SprintState = "future" | "active" | "closed";
+
+export const SPRINT_STATES: { value: SprintState; label: string }[] = [
+  { value: "future", label: "예정" },
+  { value: "active", label: "진행중" },
+  { value: "closed", label: "완료" },
+];
+
+export const SPRINT_STATE_LABELS: Record<SprintState, string> = {
+  future: "예정",
+  active: "진행중",
+  closed: "완료",
+};
+
+export type Sprint = {
+  id: string;
+  project_id: string;
+  name: string;
+  goal: string;
+  state: SprintState;
+  start_date: string | null;
+  end_date: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+  closed_at: string | null;
   deleted_at: string | null;
 };

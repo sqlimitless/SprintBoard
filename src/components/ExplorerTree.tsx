@@ -201,7 +201,7 @@ export default function ExplorerTree() {
       await projectRepo.deleteProject(id);
       await reloadProjects();
       window.dispatchEvent(new CustomEvent("projects:changed"));
-      if (params.projectId === id) navigate("/p");
+      if (params.projectId === id) navigate("/backlog/p");
     } catch (err) {
       console.error("프로젝트 삭제 실패:", err);
       alert(`삭제 실패\n${err instanceof Error ? err.message : String(err)}`);
@@ -227,9 +227,9 @@ export default function ExplorerTree() {
       );
       // If the deleted item was the current route, back off to the parent.
       if (params.epicId === iss.id) {
-        navigate(`/p/${iss.project_id}`);
+        navigate(`/backlog/p/${iss.project_id}`);
       } else if (params.storyId === iss.id) {
-        navigate(`/p/${iss.project_id}/e/${iss.parent_id ?? ""}`);
+        navigate(`/backlog/p/${iss.project_id}/e/${iss.parent_id ?? ""}`);
       }
     } catch (err) {
       console.error("이슈 삭제 실패:", err);
@@ -245,7 +245,7 @@ export default function ExplorerTree() {
           <span>Explorer</span>
         </div>
         <button
-          onClick={() => navigate("/p?new=1")}
+          onClick={() => navigate("/backlog/p?new=1")}
           title="새 프로젝트"
           className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100"
         >
@@ -271,7 +271,7 @@ export default function ExplorerTree() {
               <Row
                 indent={0}
                 selected={selected}
-                onSelect={() => navigate(`/p/${p.id}`)}
+                onSelect={() => navigate(`/backlog/p/${p.id}`)}
                 onToggle={() => toggle(pKey, () => issueRepo.listEpics(p.id))}
                 chevron={open ? "down" : "right"}
                 icon={<FolderOpen size={14} className="text-amber-600 dark:text-amber-400" />}
@@ -309,7 +309,7 @@ export default function ExplorerTree() {
                         <Row
                           indent={1}
                           selected={eSelected}
-                          onSelect={() => navigate(`/p/${p.id}/e/${epic.id}`)}
+                          onSelect={() => navigate(`/backlog/p/${p.id}/e/${epic.id}`)}
                           onToggle={() =>
                             toggle(eKey, () => issueRepo.listChildren(epic.id))
                           }
@@ -350,7 +350,7 @@ export default function ExplorerTree() {
                                   indent={2}
                                   selected={sSelected}
                                   onSelect={() =>
-                                    navigate(`/p/${p.id}/e/${epic.id}/s/${story.id}`)
+                                    navigate(`/backlog/p/${p.id}/e/${epic.id}/s/${story.id}`)
                                   }
                                   icon={<IssueTypeIcon type="story" />}
                                   label={story.title}

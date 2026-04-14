@@ -70,7 +70,7 @@ export default function ProjectForm(props: Props) {
           status,
         });
         window.dispatchEvent(new CustomEvent("projects:changed"));
-        navigate(`/p/${p.id}`);
+        navigate(`/backlog/p/${p.id}`);
       } else {
         const uniqueKey = await resolveUniqueKey(baseKey, props.project.key);
         await projectRepo.updateProject(props.project.id, {

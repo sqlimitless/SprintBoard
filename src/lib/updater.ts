@@ -1,11 +1,18 @@
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 
+export type InstallProgress =
+  | { phase: "started"; total: number }
+  | { phase: "downloading"; downloaded: number; total: number }
+  | { phase: "finished" }
+  | { phase: "installing" }
+  | { phase: "relaunching" };
+
 type UpdateInfo = {
   version: string;
   currentVersion: string;
   body: string;
-  install: () => Promise<void>;
+  install: (onProgress?: (p: InstallProgress) => void) => Promise<void>;
 };
 
 let listener: ((info: UpdateInfo | null) => void) | null = null;
@@ -38,15 +45,29 @@ export async function checkForUpdate(): Promise<CheckResult> {
     console.warn("[updater] check failed:", err);
     return { kind: "error", message };
   }
-  if (!update?.available) return { kind: "up-to-date" };
+  if (!update) return { kind: "up-to-date" };
 
   publish({
     version: update.version,
     currentVersion: update.currentVersion,
     body: update.body ?? "",
-    install: async () => {
+    install: async (onProgress) => {
       try {
-        await update!.downloadAndInstall();
+        let total = 0;
+        let downloaded = 0;
+        await update!.downloadAndInstall((event) => {
+          if (event.event === "Started") {
+            total = event.data.contentLength ?? 0;
+            onProgress?.({ phase: "started", total });
+          } else if (event.event === "Progress") {
+            downloaded += event.data.chunkLength;
+            onProgress?.({ phase: "downloading", downloaded, total });
+          } else if (event.event === "Finished") {
+            onProgress?.({ phase: "finished" });
+            onProgress?.({ phase: "installing" });
+          }
+        });
+        onProgress?.({ phase: "relaunching" });
         await relaunch();
       } catch (err) {
         console.error("[updater] install failed:", err);
@@ -55,4 +76,18 @@ export async function checkForUpdate(): Promise<CheckResult> {
     },
   });
   return { kind: "available", version: update.version };
+}
+
+export async function autoUpdate() {
+  try {
+    const update = await check();
+    if (!update) return;
+    console.log(
+      `[updater] auto-installing ${update.version} (was ${update.currentVersion})`,
+    );
+    await update.downloadAndInstall();
+    await relaunch();
+  } catch (err) {
+    console.warn("[updater] auto-update failed:", err);
+  }
 }
